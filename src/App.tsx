@@ -89,6 +89,7 @@ interface DesignWarning {
   message: string;
   action: string;
   severity: 'error' | 'warning' | 'info';
+  autoFix?: () => void;
 }
 
 // --- Constants ---
@@ -114,8 +115,6 @@ const COLORS = {
 
 const createInitialComponents = (): PCBComponent[] => {
   const components: PCBComponent[] = [];
-
-  // 10 LEDs at the top (Row 2)
   for (let i = 0; i < 10; i++) {
     components.push({
       id: `led-${i}`,
@@ -126,96 +125,99 @@ const createInitialComponents = (): PCBComponent[] => {
       color: COLORS.LED_RED,
       rotation: 0,
     });
-    // Individual resistors for each LED (Row 4)
     components.push({
       id: `res-${i}`,
       type: 'Resistor',
       label: `R${i + 1}`,
       holes: [{ x: 0, y: 0 }, { x: 4, y: 0 }],
-      position: { x: 2 + i * 2, y: 4 },
+      position: { x: 3 + i * 2, y: 5 },
       rotation: 90,
       width: 4,
     });
   }
 
-  // Controls at bottom right
   components.push({
     id: 'pot-1',
     type: 'Potentiometer',
     label: 'POT',
     holes: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }],
-    position: { x: 18, y: 24 },
+    position: { x: 4, y: 15 },
     rotation: 0,
     width: 4,
     analogPin: 'A0',
   });
-
   components.push({
     id: 'ldr-1',
     type: 'LDR',
     label: 'LDR',
     holes: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
-    position: { x: 18, y: 20 },
+    position: { x: 12, y: 15 },
     rotation: 0,
     analogPin: 'A1',
   });
-
   components.push({
     id: 'res-ldr',
     type: 'Resistor',
     label: 'RLDR',
     holes: [{ x: 0, y: 0 }, { x: 4, y: 0 }],
-    position: { x: 21, y: 20 },
+    position: { x: 12, y: 18 },
     rotation: 90,
     width: 4,
   });
-
   components.push({
     id: 'btn-1',
     type: 'Pushbutton',
     label: 'BTN',
     holes: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 2 }, { x: 4, y: 2 }],
-    position: { x: 18, y: 16 },
+    position: { x: 16, y: 14 },
     rotation: 0,
     width: 4,
     height: 2,
   });
-
   components.push({
     id: 'res-btn',
     type: 'Resistor',
     label: 'RBTN',
     holes: [{ x: 0, y: 0 }, { x: 4, y: 0 }],
-    position: { x: 24, y: 16 },
+    position: { x: 20, y: 18 },
     rotation: 90,
     width: 4,
   });
 
-  // 11 Pin headers for LEDs and Button (Bottom Left)
-  for (let i = 0; i < 11; i++) {
+  for (let i = 0; i < 10; i++) {
     components.push({
       id: `header-led-${i}`,
       type: 'Header',
-      label: i < 10 ? `H${i + 1}` : 'HB',
+      label: `H${i + 1}`,
       holes: [{ x: 0, y: 0 }],
-      position: { x: 2 + i, y: 26 },
+      position: { x: 3 + i * 2, y: 25 },
       rotation: 0,
     });
   }
-
-  // 4 Pin headers (A0, A1, Ground, Power)
-  const specialHeaders = ['A0', 'A1', 'GND', 'VCC'];
-  specialHeaders.forEach((label, i) => {
+  components.push({
+    id: `header-led-10`,
+    type: 'Header',
+    label: 'HB',
+    holes: [{ x: 0, y: 0 }],
+    position: { x: 20, y: 25 },
+    rotation: 0,
+  });
+  const specialHeaders = [
+    { label: 'A0', x: 6 },
+    { label: 'A1', x: 13 },
+    { label: 'GND', x: 2 },
+    { label: 'VCC', x: 22 }
+  ];
+  specialHeaders.forEach((h) => {
     components.push({
-      id: `header-spec-${label}`,
+      id: `header-spec-${h.label}`,
       type: 'Header',
-      label,
+      label: h.label,
       holes: [{ x: 0, y: 0 }],
-      position: { x: 2 + i, y: 28 },
+      position: { x: h.x, y: 28 },
       rotation: 0,
     });
   });
-
   return components;
 };
 
@@ -236,6 +238,16 @@ const App = () => {
   const [reverseGridRows, setReverseGridRows] = useState(false);
   const [routingAngle, setRoutingAngle] = useState<'45' | '90'>('45');
   const [isSaving, setIsSaving] = useState(false);
+
+  const isFirstMount = useRef(true);
+
+  // --- Initial Wiring Setup ---
+  useEffect(() => {
+    if (isFirstMount.current && components.length > 0 && wires.length === 0) {
+      smartRouteAll();
+      isFirstMount.current = false;
+    }
+  }, [components]);
 
   // --- Firebase Auth ---
   useEffect(() => {
@@ -477,7 +489,6 @@ const App = () => {
         if (w.startConnection) currentNet.push(w.startConnection);
         if (w.endConnection) currentNet.push(w.endConnection);
 
-        // Find other wires connected to the same pins
         wires.forEach(otherWire => {
           if (visitedWires.has(otherWire.id)) return;
           
@@ -493,7 +504,6 @@ const App = () => {
         });
       }
 
-      // Deduplicate pins in net
       const uniquePins: Pin[] = [];
       currentNet.forEach(p => {
         if (!uniquePins.some(up => up.componentId === p.componentId && up.holeIndex === p.holeIndex)) {
@@ -506,12 +516,9 @@ const App = () => {
       }
     });
 
-    // Add single pins that are not in any net but are part of a component
     components.forEach(comp => {
       comp.holes.forEach((_, idx) => {
-        if (findNet({ componentId: comp.id, holeIndex: idx }) === -1) {
-          // This pin is not connected to any wire
-        }
+        if (findNet({ componentId: comp.id, holeIndex: idx }) === -1) {}
       });
     });
 
@@ -528,13 +535,21 @@ const App = () => {
         }
       });
 
-      // Short Circuit Check
       if (hasVcc && hasGnd) {
         warnings.push({
           id: `short-${netIdx}`,
           severity: 'error',
           message: 'Short Circuit Detected!',
-          action: 'VCC and GND are connected in the same net. Remove the wire connecting them immediately.'
+          action: 'VCC and GND are connected in the same net. Tap to remove offending wires.',
+          autoFix: () => {
+            saveHistory();
+            const wiresInNet = nets[netIdx];
+            setWires(prev => prev.filter(w => {
+              if (w.startConnection && wiresInNet.some(p => p.componentId === w.startConnection?.componentId && p.holeIndex === w.startConnection?.holeIndex)) return false;
+              if (w.endConnection && wiresInNet.some(p => p.componentId === w.endConnection?.componentId && p.holeIndex === w.endConnection?.holeIndex)) return false;
+              return true;
+            }));
+          }
         });
       }
     });
@@ -553,10 +568,14 @@ const App = () => {
             id: `unconnected-${comp.id}`,
             severity: 'warning',
             message: `${comp.label} is not connected.`,
-            action: 'Connect the cathode (left pin) to GND and the anode (right pin) to a signal via a resistor.'
+            action: 'Tap to auto-route this LED.',
+            autoFix: () => {
+               saveHistory();
+               setSelectedIds([comp.id]);
+               setTimeout(() => smartRouteSelected(), 0);
+            }
           });
         } else {
-          // Check for resistor in series with LED
           const anodeNet = anodeNetIdx !== -1 ? nets[anodeNetIdx] : [];
           const hasResistor = anodeNet.some(p => {
             const c = components.find(comp => comp.id === p.componentId);
@@ -573,7 +592,12 @@ const App = () => {
               id: `led-no-resistor-${comp.id}`,
               severity: 'error',
               message: `${comp.label} connected directly to VCC.`,
-              action: 'Add a 220Ω or 330Ω resistor in series with the LED to prevent it from burning out.'
+              action: 'Tap to fix. This will reroute via a resistor.',
+              autoFix: () => {
+                saveHistory();
+                setSelectedIds([comp.id]);
+                setTimeout(() => smartRouteSelected(), 0);
+              }
             });
           }
         }
@@ -585,7 +609,12 @@ const App = () => {
             id: `pot-floating-${comp.id}`,
             severity: 'warning',
             message: `${comp.label} signal pin is floating.`,
-            action: 'Connect the middle pin to an analog input (A0 or A1) to read values.'
+            action: 'Tap to auto-route analog pin.',
+            autoFix: () => {
+              saveHistory();
+              setSelectedIds([comp.id]);
+              setTimeout(() => smartRouteSelected(), 0);
+            }
           });
         }
       }
@@ -597,10 +626,14 @@ const App = () => {
             id: `btn-unconnected-${comp.id}`,
             severity: 'info',
             message: `${comp.label} is unused.`,
-            action: 'Connect one side to VCC and the other to a digital input with a pull-down resistor.'
+            action: 'Tap to auto-route this button.',
+            autoFix: () => {
+              saveHistory();
+              setSelectedIds([comp.id]);
+              setTimeout(() => smartRouteSelected(), 0);
+            }
           });
         } else {
-          // Check for pull-up/down
           const signalPinIdx = comp.holes.length === 4 ? 2 : 1;
           const signalNetIdx = pinNets[signalPinIdx];
           if (signalNetIdx !== -1) {
@@ -624,7 +657,12 @@ const App = () => {
                 id: `btn-no-pulldown-${comp.id}`,
                 severity: 'warning',
                 message: `${comp.label} may have a floating input.`,
-                action: 'Add a 10kΩ pull-down resistor to GND to ensure a stable LOW signal when the button is not pressed.'
+                action: 'Tap to add a pull-down resistor.',
+                autoFix: () => {
+                  saveHistory();
+                  setSelectedIds([comp.id]);
+                  setTimeout(() => smartRouteSelected(), 0);
+                }
               });
             }
           }
@@ -633,7 +671,7 @@ const App = () => {
     });
 
     return warnings;
-  }, [components, wires]);
+  }, [components, wires]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const autoTapGround = useCallback((componentId: string, holeIndex: number) => {
     saveHistory();
@@ -2205,11 +2243,11 @@ const App = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-hidden flex flex-col lg:flex-row gap-6 p-6 max-w-[1800px] mx-auto w-full">
+      <main className="flex-1 relative overflow-hidden bg-neutral-950 w-full h-full text-white">
         {/* PCB Canvas */}
-        <div className="flex-1 relative bg-neutral-900 rounded-[2rem] border border-white/5 overflow-hidden shadow-inner flex items-center justify-center p-8 custom-scrollbar group">
-          <div className="absolute top-6 left-6 flex gap-2 z-10">
-            <div className="flex bg-black/40 backdrop-blur-md p-1 rounded-xl border border-white/10 shadow-xl">
+        <div className="absolute inset-0 bg-neutral-900 flex items-center justify-center p-8 custom-scrollbar group z-0">
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-30 pointer-events-auto">
+            <div className="flex bg-black/60 backdrop-blur-3xl p-1 rounded-xl border border-white/10 shadow-xl">
               <button 
                 onClick={undo}
                 disabled={history.length === 0}
@@ -2227,7 +2265,7 @@ const App = () => {
               </button>
             </div>
             
-            <div className="flex bg-black/40 backdrop-blur-md p-1 rounded-xl border border-white/10 shadow-xl">
+            <div className="flex bg-black/60 backdrop-blur-3xl p-1 rounded-xl border border-white/10 shadow-xl">
               <button 
                 onClick={rotateBoard}
                 className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-all"
@@ -2252,10 +2290,10 @@ const App = () => {
             </div>
           </div>
 
-          <div className="absolute top-6 right-6 z-10">
+          <div className="absolute top-6 right-[420px] z-30 pointer-events-auto">
             <button 
               onClick={handleExportImage}
-              className="flex items-center gap-2 px-4 py-2 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/10 transition-all shadow-xl"
+              className="flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-xl text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/10 transition-all shadow-xl"
             >
               <Download className="w-3.5 h-3.5" />
               EXPORT PNG
@@ -2337,7 +2375,7 @@ const App = () => {
             </div>
           </div>
 
-          <div className="absolute bottom-6 right-8 text-[10px] text-neutral-500 font-mono flex items-center gap-6 z-10 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/5">
+          <div className="absolute bottom-6 right-[420px] text-[10px] z-30 pointer-events-auto  text-neutral-500 font-mono flex items-center gap-6 z-10 bg-black/60 backdrop-blur-3xl px-4 py-2 rounded-full border border-white/5">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
               <span className="uppercase tracking-wider">Top Layer</span>
@@ -2350,8 +2388,8 @@ const App = () => {
         </div>
 
         {/* Sidebar Controls */}
-        <aside className="w-full lg:w-[360px] shrink-0 overflow-y-auto space-y-6 custom-scrollbar pr-2 pb-6">
-          <div className="hardware-card p-6 space-y-6">
+        <aside className="absolute right-6 top-6 bottom-6 w-[380px] shrink-0 overflow-y-auto space-y-6 custom-scrollbar pr-2 pb-6 pointer-events-auto z-30">
+          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-500 flex items-center gap-2">
                 <Wand2 className="w-3.5 h-3.5" />
@@ -2449,11 +2487,11 @@ const App = () => {
             </AnimatePresence>
           </div>
 
-          <div className="hardware-card p-6 space-y-6">
+          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400 flex items-center gap-2">
-                <Zap className="w-3.5 h-3.5" />
-                Design Analysis
+                <Activity className="w-3.5 h-3.5" />
+                Recommendations
               </h2>
               <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${getAdvancedWarnings().length > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                 {getAdvancedWarnings().length > 0 ? `${getAdvancedWarnings().length} Issues` : 'Passed'}
@@ -2465,7 +2503,8 @@ const App = () => {
                 {getAdvancedWarnings().map((w) => (
                   <div 
                     key={w.id} 
-                    className={`p-4 rounded-2xl border transition-all hover:scale-[1.02] ${
+                    onClick={() => w.autoFix && w.autoFix()}
+                    className={`p-4 rounded-2xl border transition-all ${w.autoFix ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : ''} ${
                       w.severity === 'error' ? 'bg-red-500/5 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]' : 
                       w.severity === 'warning' ? 'bg-orange-500/5 border-orange-500/20 shadow-[0_0_15px_rgba(249,115,22,0.05)]' : 
                       'bg-blue-500/5 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.05)]'
@@ -2509,7 +2548,7 @@ const App = () => {
             )}
           </div>
 
-          <div className="hardware-card p-6 space-y-6">
+          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-blue-400 flex items-center gap-2">
                 <Settings2 className="w-3.5 h-3.5" />
@@ -2852,7 +2891,7 @@ const App = () => {
               </div>
             )}
           </div>
-                <div className="hardware-card p-6 space-y-6">
+                <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500 flex items-center gap-2">
                 <Settings2 className="w-3.5 h-3.5" />
@@ -2903,7 +2942,7 @@ const App = () => {
             </div>
           </div>
 
-          <div className="hardware-card p-6 space-y-6">
+          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-blue-500 flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5" />
@@ -2930,7 +2969,7 @@ const App = () => {
                         <span className={`text-[11px] font-black ${selectedWireId === w.id ? 'text-emerald-400' : 'text-neutral-300'}`}>
                           Trace #{String(idx + 1).padStart(2, '0')}
                         </span>
-                        <span className="text-[9px] text-neutral-600 font-mono uppercase tracking-widest mt-0.5">{w.points.length} nodes</span>
+                        <span className="text-[9px] text-neutral-600 font-mono uppercase tracking-widest mt-0.5">{w.path.length} nodes</span>
                       </div>
                     </div>
                     <button 
@@ -2955,7 +2994,7 @@ const App = () => {
             </div>
           </div>
 
-          <div className="hardware-card p-6 space-y-6">
+          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-emerald-500" />
