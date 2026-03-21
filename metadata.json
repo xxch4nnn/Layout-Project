@@ -1,0 +1,5 @@
+{
+  "name": "PCB Wiring Designer",
+  "description": "A 24x30 PCB layout and wiring visualizer for LEDs, sensors, and controls with bottom-side wiring simulation.",
+  "requestFramePermissions": []
+}

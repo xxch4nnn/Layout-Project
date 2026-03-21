@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "PCBLayout": {
+      "title": "PCB Layout",
+      "description": "A complete PCB design including components, wires, and board settings.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "gridCols": { "type": "number" },
+        "gridRows": { "type": "number" },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "type": { "type": "string" },
+              "label": { "type": "string" },
+              "holes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "x": { "type": "number" },
+                    "y": { "type": "number" }
+                  }
+                }
+              },
+              "position": {
+                "type": "object",
+                "properties": {
+                  "x": { "type": "number" },
+                  "y": { "type": "number" }
+                }
+              },
+              "color": { "type": "string" },
+              "rotation": { "type": "number" },
+              "width": { "type": "number" },
+              "height": { "type": "number" }
+            }
+          }
+        },
+        "wires": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "path": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "x": { "type": "number" },
+                    "y": { "type": "number" }
+                  }
+                }
+              },
+              "color": { "type": "string" },
+              "startConnection": {
+                "type": "object",
+                "properties": {
+                  "componentId": { "type": "string" },
+                  "holeIndex": { "type": "number" }
+                }
+              },
+              "endConnection": {
+                "type": "object",
+                "properties": {
+                  "componentId": { "type": "string" },
+                  "holeIndex": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "routingAngle": { "type": "string", "enum": ["45", "90"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "components", "wires"]
+    }
+  },
+  "firestore": {
+    "/layouts/{layoutId}": {
+      "schema": "PCBLayout",
+      "description": "Collection of PCB layouts saved by users."
+    }
+  }
+}
