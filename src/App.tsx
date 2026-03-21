@@ -199,14 +199,14 @@ const createInitialComponents = (): PCBComponent[] => {
     type: 'Header',
     label: 'HB',
     holes: [{ x: 0, y: 0 }],
-    position: { x: 20, y: 25 },
+    position: { x: 23, y: 21 },
     rotation: 0,
   });
   const specialHeaders = [
     { label: 'A0', x: 6 },
     { label: 'A1', x: 13 },
     { label: 'GND', x: 2 },
-    { label: 'VCC', x: 22 }
+    { label: 'VCC', x: 25 }
   ];
   specialHeaders.forEach((h) => {
     components.push({
@@ -214,7 +214,7 @@ const createInitialComponents = (): PCBComponent[] => {
       type: 'Header',
       label: h.label,
       holes: [{ x: 0, y: 0 }],
-      position: { x: h.x, y: 28 },
+      position: { x: h.x, y: 23 },
       rotation: 0,
     });
   });
@@ -238,7 +238,13 @@ const App = () => {
   });
   const [components, setComponents] = useState<PCBComponent[]>(() => {
     const saved = localStorage.getItem('pcb_components');
-    return saved ? JSON.parse(saved) : createInitialComponents();
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        // check if old 24x30 layout components are cached, and wipe if they are
+        const outOfBounds = parsed.some((c: any) => c.position.y > 24);
+        if (!outOfBounds) return parsed;
+    }
+    return createInitialComponents();
   });
   const [wires, setWires] = useState<Wire[]>(() => {
     const saved = localStorage.getItem('pcb_wires');
@@ -382,6 +388,9 @@ const App = () => {
   // Wire Selection/Manipulation State
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
   const [draggingWirePoint, setDraggingWirePoint] = useState<{ wireId: string; pointIndex: number } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const [vccDaisyChainOrder, setVccDaisyChainOrder] = useState<string[]>(['pot-1', 'ldr-1', 'btn-1']);
 
   const handleExportImage = async () => {
@@ -827,13 +836,25 @@ const App = () => {
     const wire = wires.find(w => w.id === wireId);
     if (!wire) return;
     
+
     const svg = e.currentTarget.closest('svg');
     if (!svg) return;
-    const CTM = svg.getScreenCTM();
-    if (!CTM) return;
+    const innerG = svg.querySelector('#workspace-group');
+    if (!innerG) return;
+
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
     
-    const mouseX = (e.clientX - CTM.e) / CTM.a;
-    const mouseY = (e.clientY - CTM.f) / CTM.d;
+    let loc;
+    try {
+      loc = pt.matrixTransform(innerG.getScreenCTM()?.inverse());
+    } catch(err) {
+      return;
+    }
+    const mouseX = loc.x;
+    const mouseY = loc.y;
+
     const mouseGridPos = {
       x: (mouseX - PCB_PADDING) / HOLE_SPACING,
       y: (mouseY - PCB_PADDING) / HOLE_SPACING
@@ -884,14 +905,25 @@ const App = () => {
 
     setIsDragging(true);
     
+
     const svg = e.currentTarget.closest('svg');
     if (!svg) return;
+    const innerG = svg.querySelector('#workspace-group');
+    if (!innerG) return;
     
-    const CTM = svg.getScreenCTM();
-    if (!CTM) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
     
-    const mouseX = (e.clientX - CTM.e) / CTM.a;
-    const mouseY = (e.clientY - CTM.f) / CTM.d;
+    let loc;
+    try {
+      loc = pt.matrixTransform(innerG.getScreenCTM()?.inverse());
+    } catch(err) {
+      return;
+    }
+    const mouseX = loc.x;
+    const mouseY = loc.y;
+
     
     setDragOffset({
       x: mouseX - (comp.position.x * HOLE_SPACING + PCB_PADDING),
@@ -900,14 +932,25 @@ const App = () => {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+
     const svg = e.currentTarget.closest('svg');
     if (!svg) return;
+    const innerG = svg.querySelector('#workspace-group');
+    if (!innerG) return;
     
-    const CTM = svg.getScreenCTM();
-    if (!CTM) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
     
-    const mouseX = (e.clientX - CTM.e) / CTM.a;
-    const mouseY = (e.clientY - CTM.f) / CTM.d;
+    let loc;
+    try {
+      loc = pt.matrixTransform(innerG.getScreenCTM()?.inverse());
+    } catch(err) {
+      return;
+    }
+    const mouseX = loc.x;
+    const mouseY = loc.y;
+
 
     if (selectionBox) {
       setSelectionBox(prev => prev ? { ...prev, end: { x: mouseX, y: mouseY } } : null);
@@ -944,14 +987,8 @@ const App = () => {
         true // Snap to full holes for components
       );
 
-      const targetPos = snapToGrid(
-        (mouseX - PCB_PADDING) / HOLE_SPACING - dragOffset.x,
-        (mouseY - PCB_PADDING) / HOLE_SPACING - dragOffset.y,
-        true
-      );
-
-      const dx = targetPos.x - primaryComp.position.x;
-      const dy = targetPos.y - primaryComp.position.y;
+      const dx = newPos.x - primaryComp.position.x;
+      const dy = newPos.y - primaryComp.position.y;
 
       if (dx !== 0 || dy !== 0) {
         setComponents(prev => prev.map(c => {
@@ -1015,13 +1052,25 @@ const App = () => {
   const handleSvgClick = (e: React.MouseEvent) => {
     if (!routingMode) return;
     
+
     const svg = e.currentTarget.closest('svg');
     if (!svg) return;
-    const CTM = svg.getScreenCTM();
-    if (!CTM) return;
+    const innerG = svg.querySelector('#workspace-group');
+    if (!innerG) return;
+
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
     
-    const mouseX = (e.clientX - CTM.e) / CTM.a;
-    const mouseY = (e.clientY - CTM.f) / CTM.d;
+    let loc;
+    try {
+      loc = pt.matrixTransform(innerG.getScreenCTM()?.inverse());
+    } catch(err) {
+      return;
+    }
+    const mouseX = loc.x;
+    const mouseY = loc.y;
+
     const mouseGridPos = {
       x: (mouseX - PCB_PADDING) / HOLE_SPACING,
       y: (mouseY - PCB_PADDING) / HOLE_SPACING
@@ -2360,8 +2409,10 @@ const App = () => {
                 const svg = e.currentTarget;
                 const CTM = svg.getScreenCTM();
                 if (!CTM) return;
-                const mouseX = (e.clientX - CTM.e) / CTM.a;
-                const mouseY = (e.clientY - CTM.f) / CTM.d;
+                const rawMouseX = (e.clientX - CTM.e) / CTM.a;
+    const rawMouseY = (e.clientY - CTM.f) / CTM.d;
+    const mouseX = (rawMouseX - pan.x) / zoom;
+    const mouseY = (rawMouseY - pan.y) / zoom;
                 setSelectionBox({ start: { x: mouseX, y: mouseY }, end: { x: mouseX, y: mouseY } });
                 if (!e.shiftKey) {
                   setSelectedIds([]);
