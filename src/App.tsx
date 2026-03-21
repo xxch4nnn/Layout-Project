@@ -190,7 +190,7 @@ const createInitialComponents = (): PCBComponent[] => {
       type: 'Header',
       label: `H${i + 1}`,
       holes: [{ x: 0, y: 0 }],
-      position: { x: 3 + i * 2, y: 25 },
+      position: { x: 3 + i * 2, y: 21 },
       rotation: 0,
     });
   }
@@ -223,20 +223,37 @@ const createInitialComponents = (): PCBComponent[] => {
 
 // --- App Component ---
 
+
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [view, setView] = useState<'face' | 'bottom'>('face');
-  const [gridCols, setGridCols] = useState(24);
-  const [gridRows, setGridRows] = useState(30);
-  const [components, setComponents] = useState<PCBComponent[]>(createInitialComponents());
-  const [wires, setWires] = useState<Wire[]>([]); // Start empty for manual routing
+  const [gridCols, setGridCols] = useState(() => {
+    const saved = localStorage.getItem('pcb_gridCols');
+    return saved ? JSON.parse(saved) : 30;
+  });
+  const [gridRows, setGridRows] = useState(() => {
+    const saved = localStorage.getItem('pcb_gridRows');
+    return saved ? JSON.parse(saved) : 24;
+  });
+  const [components, setComponents] = useState<PCBComponent[]>(() => {
+    const saved = localStorage.getItem('pcb_components');
+    return saved ? JSON.parse(saved) : createInitialComponents();
+  });
+  const [wires, setWires] = useState<Wire[]>(() => {
+    const saved = localStorage.getItem('pcb_wires');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showLabels, setShowLabels] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [reverseGridCols, setReverseGridCols] = useState(false);
   const [reverseGridRows, setReverseGridRows] = useState(false);
-  const [routingAngle, setRoutingAngle] = useState<'45' | '90'>('45');
+  const [routingAngle, setRoutingAngle] = useState<'45' | '90'>(() => {
+    const saved = localStorage.getItem('pcb_routingAngle');
+    return (saved === '45' || saved === '90') ? saved : '45';
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   const isFirstMount = useRef(true);
@@ -262,8 +279,12 @@ const App = () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login failed:", error);
+    } catch (error: any) {
+      if (error.code === "auth/unauthorized-domain") {
+          alert("Firebase Login Domain Unauthorized. Try local saving instead for now.");
+      } else {
+          console.error("Login failed:", error);
+      }
     }
   };
 
@@ -293,7 +314,17 @@ const App = () => {
     return () => unsubscribe();
   }, [user]);
 
+
+  useEffect(() => {
+    localStorage.setItem('pcb_components', JSON.stringify(components));
+    localStorage.setItem('pcb_wires', JSON.stringify(wires));
+    localStorage.setItem('pcb_gridCols', JSON.stringify(gridCols));
+    localStorage.setItem('pcb_gridRows', JSON.stringify(gridRows));
+    localStorage.setItem('pcb_routingAngle', routingAngle);
+  }, [components, wires, gridCols, gridRows, routingAngle]);
+
   // Debounced save
+
   useEffect(() => {
     if (!user || !isAuthReady) return;
 
@@ -913,8 +944,14 @@ const App = () => {
         true // Snap to full holes for components
       );
 
-      const dx = newPos.x - primaryComp.position.x;
-      const dy = newPos.y - primaryComp.position.y;
+      const targetPos = snapToGrid(
+        (mouseX - PCB_PADDING) / HOLE_SPACING - dragOffset.x,
+        (mouseY - PCB_PADDING) / HOLE_SPACING - dragOffset.y,
+        true
+      );
+
+      const dx = targetPos.x - primaryComp.position.x;
+      const dy = targetPos.y - primaryComp.position.y;
 
       if (dx !== 0 || dy !== 0) {
         setComponents(prev => prev.map(c => {
