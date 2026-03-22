@@ -2263,6 +2263,7 @@ const App = () => {
                   onClick={logout}
                   className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/10 hover:border-red-500/20 text-neutral-500 hover:text-red-400 transition-all"
                   title="Logout"
+                  aria-label="Logout"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -2290,6 +2291,7 @@ const App = () => {
                 disabled={history.length === 0}
                 className={`p-2 rounded-lg transition-all ${history.length > 0 ? 'text-white hover:bg-white/10' : 'text-neutral-700 cursor-not-allowed'}`}
                 title="Undo (Ctrl+Z)"
+                aria-label="Undo"
               >
                 <Undo2 className="w-4 h-4" />
               </button>
@@ -2297,6 +2299,7 @@ const App = () => {
                 disabled={true} // Redo not implemented yet
                 className="p-2 rounded-lg text-neutral-700 cursor-not-allowed"
                 title="Redo"
+                aria-label="Redo"
               >
                 <Redo2 className="w-4 h-4" />
               </button>
@@ -2307,6 +2310,7 @@ const App = () => {
                 onClick={rotateBoard}
                 className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-all"
                 title="Rotate Board 90°"
+                aria-label="Rotate Board 90 degrees"
               >
                 <FlipHorizontal className="w-4 h-4 rotate-90" />
               </button>
@@ -2314,6 +2318,7 @@ const App = () => {
                 onClick={() => setShowLabels(!showLabels)}
                 className={`p-2 rounded-lg transition-all ${showLabels ? 'text-emerald-400 bg-emerald-500/10' : 'text-neutral-400 hover:text-white hover:bg-white/10'}`}
                 title="Toggle Labels"
+                aria-label="Toggle Labels"
               >
                 <Box className="w-4 h-4" />
               </button>
@@ -2321,6 +2326,7 @@ const App = () => {
                 onClick={() => setShowGrid(!showGrid)}
                 className={`p-2 rounded-lg transition-all ${showGrid ? 'text-emerald-400 bg-emerald-500/10' : 'text-neutral-400 hover:text-white hover:bg-white/10'}`}
                 title="Toggle Grid"
+                aria-label="Toggle Grid"
               >
                 <Grid3X3 className="w-4 h-4" />
               </button>
@@ -2957,6 +2963,7 @@ const App = () => {
                           onClick={() => moveVccItem(idx, 'up')}
                           disabled={idx === 0}
                           className="p-1.5 hover:bg-white/10 rounded-lg disabled:opacity-20 text-neutral-400 hover:text-white transition-all"
+                          aria-label="Move item up"
                         >
                           <ChevronUp className="w-3.5 h-3.5" />
                         </button>
@@ -2964,6 +2971,7 @@ const App = () => {
                           onClick={() => moveVccItem(idx, 'down')}
                           disabled={idx === vccDaisyChainOrder.length - 1}
                           className="p-1.5 hover:bg-white/10 rounded-lg disabled:opacity-20 text-neutral-400 hover:text-white transition-all"
+                          aria-label="Move item down"
                         >
                           <ChevronDown className="w-3.5 h-3.5" />
                         </button>
@@ -3017,6 +3025,7 @@ const App = () => {
                         if (selectedWireId === w.id) setSelectedWireId(null);
                       }}
                       className="p-2 hover:bg-red-500/10 rounded-lg text-neutral-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                      aria-label="Delete Trace"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
