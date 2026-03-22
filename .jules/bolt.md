@@ -1,0 +1,3 @@
+## 2025-03-22 - Prevent multiple re-evaluations of heavy callbacks in React renders
+**Learning:** Found an O(n^2) nested loop computation `getAdvancedWarnings` (which generates circuit nets and analyzes shorts/errors) being called 4 times directly inside a React functional component's JSX render block. This means the heavy computation runs 4 times per re-render, and since state changes like mouse movement during wire drawing trigger re-renders, it caused massive frame drops.
+**Action:** Always verify if a function invoked in the JSX template (like `someFunction().length`) does heavy work. If it does, extract its result into a memoized variable (`useMemo`) outside the JSX so it's only computed once per render and only recomputed when actual dependencies change.

@@ -1827,6 +1827,8 @@ const App = () => {
     return points;
   }, [wires]);
 
+  const advancedWarnings = useMemo(() => getAdvancedWarnings(), [getAdvancedWarnings]);
+
   // --- Rendering ---
 
   const renderGrid = () => {
@@ -2536,14 +2538,14 @@ const App = () => {
                 <Activity className="w-3.5 h-3.5" />
                 Recommendations
               </h2>
-              <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${getAdvancedWarnings().length > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                {getAdvancedWarnings().length > 0 ? `${getAdvancedWarnings().length} Issues` : 'Passed'}
+              <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${advancedWarnings.length > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                {advancedWarnings.length > 0 ? `${advancedWarnings.length} Issues` : 'Passed'}
               </div>
             </div>
             
-            {getAdvancedWarnings().length > 0 ? (
+            {advancedWarnings.length > 0 ? (
               <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                {getAdvancedWarnings().map((w) => (
+                {advancedWarnings.map((w) => (
                   <div 
                     key={w.id} 
                     onClick={() => w.autoFix && w.autoFix()}
