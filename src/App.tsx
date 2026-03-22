@@ -5,40 +5,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
-import { 
-  Cpu, 
-  Layers, 
-  FlipHorizontal, 
-  Settings2, 
-  Zap, 
-  MousePointer2,
-  RotateCcw,
-  Download,
-  Eye,
-  EyeOff,
-  Trash2,
-  ChevronUp,
-  ChevronDown,
-  LogIn,
-  LogOut,
-  Save,
-  RefreshCw,
-  ArrowLeftRight,
-  Plus,
-  Undo2,
-  Redo2,
-  Grid3X3,
-  Activity,
-  AlertTriangle,
-  Info,
-  Maximize2,
-  Minimize2,
-  Share2,
-  History,
-  Box,
-  Wand2,
-  X
-} from 'lucide-react';
+import { Cpu, Layers, FlipHorizontal, Settings2, Zap, MousePointer2, RotateCcw, Download, Eye, EyeOff, Trash2, ChevronUp, ChevronDown, LogIn, LogOut, Save, RefreshCw, ArrowLeftRight, Plus, Undo2, Redo2, Grid3X3, Activity, AlertTriangle, Info, Maximize2, Minimize2, Share2, History, Box, Wand2, X, Lightbulb, CircleDashed, Menu, ToggleLeft, GitMerge, Grid, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { auth, db } from './firebase';
 import { 
@@ -353,6 +320,77 @@ const App = () => {
   }, [components, wires, gridCols, gridRows, routingAngle, reverseGridCols, reverseGridRows, user, isAuthReady]);
 
   // History for Undo
+
+  // --- Component Spawning ---
+  const spawnComponent = (type: PCBComponent['type']) => {
+    saveHistory();
+    const centerX = Math.floor(gridCols / 2);
+    const centerY = Math.floor(gridRows / 2);
+
+    const typeCount = components.filter(c => c.type === type).length;
+    let label = '';
+    let width = 1;
+    let height = 1;
+    let holes: PCBComponent['holes'] = [];
+    let color = undefined;
+
+    switch (type) {
+      case 'Resistor':
+        label = `R${typeCount + 1}`;
+        width = 4;
+        height = 1;
+        holes = [{ x: 0, y: 0 }, { x: 3, y: 0 }];
+        break;
+      case 'LED':
+        label = `D${typeCount + 1}`;
+        width = 2;
+        height = 2;
+        holes = [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+        color = COLORS.LED_RED;
+        break;
+      case 'Potentiometer':
+        label = `RV${typeCount + 1}`;
+        width = 3;
+        height = 3;
+        holes = [{ x: 0, y: 1 }, { x: 1, y: 0 }, { x: 2, y: 1 }];
+        break;
+      case 'LDR':
+        label = `LDR${typeCount + 1}`;
+        width = 2;
+        height = 2;
+        holes = [{ x: 0, y: 0 }, { x: 1, y: 0 }];
+        break;
+      case 'Pushbutton':
+        label = `SW${typeCount + 1}`;
+        width = 4;
+        height = 4;
+        holes = [
+          { x: 0, y: 0 }, { x: 3, y: 0 },
+          { x: 0, y: 3 }, { x: 3, y: 3 }
+        ];
+        break;
+      case 'Header':
+        label = `J${typeCount + 1}`;
+        width = 4;
+        height = 1;
+        holes = Array.from({ length: 4 }).map((_, i) => ({ x: i, y: 0 }));
+        break;
+    }
+
+    const newComp: PCBComponent = {
+      id: `comp-${Date.now()}`,
+      type,
+      label,
+      position: { x: centerX - Math.floor(width / 2), y: Math.max(0, centerY - Math.floor(height / 2)) },
+      rotation: 0,
+      holes,
+      color
+    };
+
+    setComponents(prev => [...prev, newComp]);
+    setSelectedIds([newComp.id]);
+  };
+
   const [history, setHistory] = useState<{ components: PCBComponent[]; wires: Wire[] }[]>([]);
 
   const saveHistory = useCallback(() => {
@@ -373,6 +411,7 @@ const App = () => {
 
   // Routing State
   const [routingMode, setRoutingMode] = useState(false);
+  const [traceColor, setTraceColor] = useState(COLORS.WIRE_BLUE);
   const [activeWirePath, setActiveWirePath] = useState<Point[]>([]);
   const [wireColor, setWireColor] = useState(COLORS.WIRE_BLUE);
 
@@ -1829,6 +1868,25 @@ const App = () => {
 
   const advancedWarnings = useMemo(() => getAdvancedWarnings(), [getAdvancedWarnings]);
 
+
+
+  const exportBoard = () => {
+    // Basic export stub since html2canvas is complicated here
+    alert("Export feature coming soon");
+  };
+
+  const getRecommendations = () => {
+    const recs: { type: 'error' | 'warning' | 'success'; msg: string }[] = [];
+    if (components.length === 0) recs.push({ type: 'warning', msg: 'Add some components to start.' });
+    if (components.length > 0 && wires.length === 0) recs.push({ type: 'warning', msg: 'No traces routed yet.' });
+    return recs;
+  };
+
+  const updateComponentProp = (id: string, updates: Partial<PCBComponent>) => {
+    saveHistory();
+    setComponents(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+  };
+
   // --- Rendering ---
 
   const renderGrid = () => {
@@ -2283,10 +2341,199 @@ const App = () => {
         </div>
       </header>
 
-      <main className="flex-1 relative overflow-hidden bg-neutral-950 w-full h-full text-white">
-        {/* PCB Canvas */}
-        <div className="absolute inset-0 bg-neutral-900 flex items-center justify-center p-8 custom-scrollbar group z-0">
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-30 pointer-events-auto">
+      <main className="flex-1 flex overflow-hidden bg-neutral-950 w-full h-full text-white">
+
+      {/* LEFT SIDEBAR - Tools & Actions */}
+      <motion.aside
+        initial={{ x: -50, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ delay: 0.1, duration: 0.4 }}
+        className="w-[260px] bg-black/60 backdrop-blur-3xl border-r border-white/10 p-5 flex flex-col gap-6 z-40 overflow-y-auto custom-scrollbar shadow-2xl h-full"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+            <Cpu className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-white">Design Tools</h2>
+            <p className="text-xs text-neutral-400">Layout & routing</p>
+          </div>
+        </div>
+
+        {/* Toolbar - Mode Selection */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Mode</h3>
+          <div className="flex bg-neutral-900/80 p-1 rounded-xl border border-white/5">
+            <button
+              onClick={() => { setRoutingMode(false); setActiveWirePath([]); setDraggingWirePoint(null); }}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
+                !routingMode ? 'bg-neutral-800 text-white shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <MousePointer2 className="w-3.5 h-3.5" />
+              Select
+            </button>
+            <button
+              onClick={() => { setRoutingMode(true); setSelectedIds([]); }}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
+                routingMode ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-neutral-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <GitMerge className="w-3.5 h-3.5" />
+              Route
+            </button>
+          </div>
+        </div>
+
+        {/* Board Controls */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Board Controls</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={undo} disabled={history.length === 0} className="hardware-card flex flex-col items-center justify-center p-3 gap-2 disabled:opacity-30 disabled:hover:border-white/5">
+              <Undo2 className="w-4 h-4 text-neutral-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Undo</span>
+            </button>
+            <button onClick={rotateBoard} className="hardware-card flex flex-col items-center justify-center p-3 gap-2">
+              <RefreshCw className="w-4 h-4 text-neutral-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Rotate</span>
+            </button>
+            <button onClick={() => setShowLabels(!showLabels)} className={`hardware-card flex flex-col items-center justify-center p-3 gap-2 ${showLabels ? 'bg-white/5 border-white/20' : ''}`}>
+              <Eye className="w-4 h-4 text-neutral-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Labels</span>
+            </button>
+            <button onClick={() => setShowGrid(!showGrid)} className={`hardware-card flex flex-col items-center justify-center p-3 gap-2 ${showGrid ? 'bg-white/5 border-white/20' : ''}`}>
+              <Grid className="w-4 h-4 text-neutral-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Grid</span>
+            </button>
+            <button onClick={exportBoard} className="hardware-card col-span-2 flex items-center justify-center p-3 gap-2">
+              <Download className="w-4 h-4 text-neutral-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Export PNG</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Component Library */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Component Library</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => spawnComponent('LED')} className="hardware-card flex flex-col items-center justify-center p-3 gap-2">
+              <Lightbulb className="w-4 h-4 text-red-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">LED</span>
+            </button>
+            <button onClick={() => spawnComponent('Resistor')} className="hardware-card flex flex-col items-center justify-center p-3 gap-2">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Resistor</span>
+            </button>
+            <button onClick={() => spawnComponent('Potentiometer')} className="hardware-card flex flex-col items-center justify-center p-3 gap-2">
+              <Activity className="w-4 h-4 text-blue-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Trimpot</span>
+            </button>
+            <button onClick={() => spawnComponent('LDR')} className="hardware-card flex flex-col items-center justify-center p-3 gap-2">
+              <CircleDashed className="w-4 h-4 text-emerald-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">LDR</span>
+            </button>
+            <button onClick={() => spawnComponent('Pushbutton')} className="hardware-card flex flex-col items-center justify-center p-3 gap-2">
+              <ToggleLeft className="w-4 h-4 text-purple-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Button</span>
+            </button>
+            <button onClick={() => spawnComponent('Header')} className="hardware-card flex flex-col items-center justify-center p-3 gap-2">
+              <Menu className="w-4 h-4 text-neutral-400" />
+              <span className="text-[10px] text-neutral-300 font-medium">Header</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Actions</h3>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={smartRouteAll}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-4 h-4" />
+                <span className="text-xs font-medium">Smart Route All</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { if(confirm('Clear all traces?')) { saveHistory(); setWires([]); } }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-neutral-900 border border-white/5 hover:border-white/10 hover:bg-neutral-800 transition-all group"
+            >
+              <div className="flex items-center gap-2 text-neutral-400 group-hover:text-white transition-colors">
+                <Trash2 className="w-4 h-4" />
+                <span className="text-xs font-medium">Clear Traces</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { if(confirm('Reset board? This cannot be undone.')) { setComponents(createInitialComponents()); setWires([]); setHistory([]); } }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-xs font-medium">Reset Board</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Routing Angle & Trace Color (Only visible in Route mode) */}
+        {routingMode && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="space-y-4 pt-4 border-t border-white/10"
+          >
+            <div className="space-y-3">
+              <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider flex items-center justify-between">
+                Trace Angle
+                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">{routingAngle}°</span>
+              </h3>
+              <div className="flex bg-neutral-900/80 p-1 rounded-xl border border-white/5">
+                <button
+                  onClick={() => setRoutingAngle('any')}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    routingAngle === 'any' ? 'bg-neutral-800 text-white shadow-sm' : 'text-neutral-500 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  Any
+                </button>
+                <button
+                  onClick={() => setRoutingAngle('90')}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    routingAngle === '90' ? 'bg-neutral-800 text-white shadow-sm' : 'text-neutral-500 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  90°
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Trace Color</h3>
+              <div className="grid grid-cols-5 gap-2">
+                {[COLORS.WIRE_RED, COLORS.WIRE_BLUE, '#10b981', COLORS.WIRE_YELLOW, COLORS.WIRE_BLACK].map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setTraceColor(color)}
+                    className={`w-full aspect-square rounded-lg border-2 transition-all ${
+                      traceColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </motion.aside>
+
+      {/* CENTER CANVAS */}
+      <div className="flex-1 relative bg-neutral-900 flex items-center justify-center p-8 custom-scrollbar group z-0 overflow-auto">
+
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-30 pointer-events-auto">
             <div className="flex bg-black/60 backdrop-blur-3xl p-1 rounded-xl border border-white/10 shadow-xl">
               <button 
                 onClick={undo}
@@ -2335,24 +2582,16 @@ const App = () => {
             </div>
           </div>
 
-          <div className="absolute top-6 right-[420px] z-30 pointer-events-auto">
-            <button 
-              onClick={handleExportImage}
-              className="flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-xl text-xs font-bold text-neutral-400 hover:text-white hover:bg-white/10 transition-all shadow-xl"
-            >
-              <Download className="w-3.5 h-3.5" />
-              EXPORT PNG
-            </button>
-          </div>
+        <div className="relative inline-block shadow-2xl transition-transform duration-200"
 
-          <div className="overflow-auto w-full h-full flex items-center justify-center custom-scrollbar p-12">
-            <div id="pcb-svg-container" className="shrink-0 p-12 bg-neutral-950 rounded-[2.5rem] border border-white/5 shadow-[0_0_100px_rgba(0,0,0,0.5)] relative">
-              {/* Decorative PCB Screws */}
-              <div className="absolute top-4 left-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
-              <div className="absolute top-4 right-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
-              <div className="absolute bottom-4 left-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
-              <div className="absolute bottom-4 right-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
-              <motion.svg 
+        >
+          {/* Corner Screws */}
+          <div className="absolute top-4 left-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
+          <div className="absolute top-4 right-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
+          <div className="absolute bottom-4 left-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
+          <div className="absolute bottom-4 right-4 w-4 h-4 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center"><div className="w-1.5 h-1.5 rounded-full bg-neutral-900" /></div>
+
+          <motion.svg
                 id="pcb-svg"
               width={gridCols * HOLE_SPACING + PCB_PADDING * 2} 
               height={gridRows * HOLE_SPACING + PCB_PADDING * 2} 
@@ -2417,717 +2656,167 @@ const App = () => {
                 />
               )}
             </motion.svg>
+
+        </div>
+      </div>
+
+      {/* RIGHT SIDEBAR - Context & Management */}
+      <motion.aside
+        initial={{ x: 50, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ delay: 0.1, duration: 0.4 }}
+        className="w-[320px] bg-black/60 backdrop-blur-3xl border-l border-white/10 p-5 flex flex-col gap-6 z-40 overflow-y-auto custom-scrollbar shadow-2xl h-full"
+      >
+        {/* Recommendations Context */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-amber-400 mb-2">
+            <AlertCircle className="w-4 h-4" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider">Recommendations</h3>
+          </div>
+          {getRecommendations().length > 0 ? (
+            <div className="space-y-2">
+              {getRecommendations().map((rec, i) => (
+                <div key={i} className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                  rec.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-300' :
+                  rec.type === 'warning' ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' :
+                  'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                }`}>
+                  {rec.msg}
+                </div>
+              ))}
             </div>
+          ) : (
+            <div className="p-4 rounded-xl border border-white/5 bg-neutral-900 text-neutral-500 text-xs text-center flex flex-col items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500/50" />
+              Board looks good!
+            </div>
+          )}
+        </div>
+
+        {/* Inspector (Selection-aware) */}
+        {selectedIds.length === 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-3 pt-4 border-t border-white/10"
+          >
+            {(() => {
+              const comp = components.find(c => c.id === selectedIds[0]);
+              if (!comp) return null;
+              return (
+                <>
+                  <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider flex items-center justify-between">
+                    Component Inspector
+                    <span className="text-[10px] text-neutral-400 bg-white/5 px-1.5 py-0.5 rounded font-mono">{comp.type}</span>
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1 block">Label</label>
+                      <input 
+                        type="text"
+                        value={comp.label}
+                        onChange={(e) => updateComponentProp(comp.id, { label: e.target.value })}
+                        className="w-full bg-neutral-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1 block">X Position</label>
+                        <input
+                          type="number"
+                          value={comp.position.x}
+                          min={0} max={gridCols - 1}
+                          onChange={(e) => updateComponentProp(comp.id, { position: { ...comp.position, x: parseInt(e.target.value) || 0 } })}
+                          className="w-full bg-neutral-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-neutral-500 uppercase tracking-wider mb-1 block">Y Position</label>
+                        <input
+                          type="number"
+                          value={comp.position.y}
+                          min={0} max={gridRows - 1}
+                          onChange={(e) => updateComponentProp(comp.id, { position: { ...comp.position, y: parseInt(e.target.value) || 0 } })}
+                          className="w-full bg-neutral-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </motion.div>
+        )}
+
+        {/* Trace Manager */}
+        <div className="space-y-3 pt-4 border-t border-white/10">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Trace Manager</h3>
+            <span className="text-[10px] bg-white/5 px-1.5 py-0.5 rounded text-neutral-400">{wires.length} Total</span>
           </div>
 
-          <div className="absolute bottom-6 right-[420px] text-[10px] z-30 pointer-events-auto  text-neutral-500 font-mono flex items-center gap-6 z-10 bg-black/60 backdrop-blur-3xl px-4 py-2 rounded-full border border-white/5">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              <span className="uppercase tracking-wider">Top Layer</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
-              <span className="uppercase tracking-wider">Bottom Layer</span>
-            </div>
+          <div className="max-h-[200px] overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+            {wires.map(wire => (
+              <div key={wire.id} className="group flex items-center justify-between p-2 rounded-lg bg-neutral-900 border border-white/5 hover:border-white/10 transition-colors">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: wire.color }} />
+                  <span className="text-xs font-mono text-neutral-300">
+                    {wire.startConnection ? components.find(c => c.id === wire.startConnection?.componentId)?.label : 'GND'} → {components.find(c => c.id === wire.endConnection?.componentId)?.label || 'Via'}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => {
+                    saveHistory();
+                    setWires(prev => prev.filter(w => w.id !== wire.id));
+                  }}
+                  className="p-1 rounded bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/20"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            {wires.length === 0 && (
+              <div className="text-xs text-neutral-500 text-center py-4 border border-dashed border-white/10 rounded-lg">
+                No traces routed yet
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Sidebar Controls */}
-        <aside className="absolute right-6 top-6 bottom-6 w-[380px] shrink-0 overflow-y-auto space-y-6 custom-scrollbar pr-2 pb-6 pointer-events-auto z-30">
-          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-500 flex items-center gap-2">
-                <Wand2 className="w-3.5 h-3.5" />
-                Toolbar
-              </h2>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <button 
-                onClick={() => setRoutingMode(false)}
-                className={`group relative overflow-hidden py-4 rounded-2xl text-xs font-bold transition-all border flex flex-col items-center gap-2 ${!routingMode ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]' : 'bg-neutral-800/50 border-white/5 text-neutral-500 hover:border-white/10 hover:text-white'}`}
-              >
-                <MousePointer2 className={`w-5 h-5 transition-transform ${!routingMode ? 'scale-110' : 'group-hover:scale-110'}`} />
-                SELECT
-              </button>
-              <button 
-                onClick={() => setRoutingMode(true)}
-                className={`group relative overflow-hidden py-4 rounded-2xl text-xs font-bold transition-all border flex flex-col items-center gap-2 ${routingMode ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]' : 'bg-neutral-800/50 border-white/5 text-neutral-500 hover:border-white/10 hover:text-white'}`}
-              >
-                <Zap className={`w-5 h-5 transition-transform ${routingMode ? 'scale-110' : 'group-hover:scale-110'}`} />
-                ROUTING
-              </button>
-            </div>
-
-            <div className="space-y-4 pt-4 border-t border-white/5">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] text-neutral-500 uppercase font-black tracking-widest">Grid Controls</p>
-                <Grid3X3 className="w-3 h-3 text-neutral-700" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  onClick={() => setReverseGridCols(!reverseGridCols)}
-                  className={`py-2.5 rounded-xl text-[9px] font-black tracking-tighter border transition-all flex items-center justify-center gap-2 ${reverseGridCols ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-neutral-800/50 border-white/5 text-neutral-500 hover:text-white'}`}
-                >
-                  <ArrowLeftRight className="w-3 h-3" />
-                  REVERSE A-X
-                </button>
-                <button 
-                  onClick={() => setReverseGridRows(!reverseGridRows)}
-                  className={`py-2.5 rounded-xl text-[9px] font-black tracking-tighter border transition-all flex items-center justify-center gap-2 ${reverseGridRows ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-neutral-800/50 border-white/5 text-neutral-500 hover:text-white'}`}
-                >
-                  <ArrowLeftRight className="w-3 h-3" />
-                  REVERSE 1-30
-                </button>
-              </div>
-            </div>
-            
-            <AnimatePresence>
-              {routingMode && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="space-y-5 pt-4 border-t border-white/5 overflow-hidden"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] text-neutral-500 uppercase font-black tracking-widest">Routing Angle</p>
-                    <div className="flex bg-black/40 rounded-lg p-0.5 border border-white/5">
-                      <button 
-                        onClick={() => setRoutingAngle('45')}
-                        className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${routingAngle === '45' ? 'bg-emerald-500 text-black' : 'text-neutral-500 hover:text-white'}`}
-                      >
-                        45°
-                      </button>
-                      <button 
-                        onClick={() => setRoutingAngle('90')}
-                        className={`px-3 py-1 rounded-md text-[10px] font-black transition-all ${routingAngle === '90' ? 'bg-emerald-500 text-black' : 'text-neutral-500 hover:text-white'}`}
-                      >
-                        90°
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <p className="text-[10px] text-neutral-500 uppercase font-black tracking-widest">Trace Color</p>
-                    <div className="flex justify-between items-center bg-black/20 p-2 rounded-2xl border border-white/5">
-                      {[COLORS.WIRE_RED, COLORS.WIRE_BLACK, COLORS.WIRE_BLUE, COLORS.WIRE_YELLOW].map(c => (
-                        <button 
-                          key={c}
-                          onClick={() => setWireColor(c)}
-                          className={`w-8 h-8 rounded-full border-2 transition-all relative ${wireColor === c ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'}`}
-                          style={{ backgroundColor: c }}
-                        >
-                          {wireColor === c && <div className="absolute inset-0 rounded-full ring-4 ring-emerald-500/20 animate-pulse" />}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
-                    <Info className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                    <p className="text-[10px] text-blue-400/80 leading-tight font-medium">Click to add points, double-click to finalize trace.</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400 flex items-center gap-2">
-                <Activity className="w-3.5 h-3.5" />
-                Recommendations
-              </h2>
-              <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${advancedWarnings.length > 0 ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                {advancedWarnings.length > 0 ? `${advancedWarnings.length} Issues` : 'Passed'}
-              </div>
-            </div>
-            
-            {advancedWarnings.length > 0 ? (
-              <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                {advancedWarnings.map((w) => (
-                  <div 
-                    key={w.id} 
-                    onClick={() => w.autoFix && w.autoFix()}
-                    className={`p-4 rounded-2xl border transition-all ${w.autoFix ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : ''} ${
-                      w.severity === 'error' ? 'bg-red-500/5 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)]' : 
-                      w.severity === 'warning' ? 'bg-orange-500/5 border-orange-500/20 shadow-[0_0_15px_rgba(249,115,22,0.05)]' : 
-                      'bg-blue-500/5 border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.05)]'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-1 w-2 h-2 rounded-full shrink-0 shadow-lg ${
-                        w.severity === 'error' ? 'bg-red-500 shadow-red-500/50' : 
-                        w.severity === 'warning' ? 'bg-orange-500 shadow-orange-500/50' : 
-                        'bg-blue-500 shadow-blue-500/50'
-                      }`} />
-                      <div className="space-y-2">
-                        <p className={`text-[11px] font-black leading-tight tracking-tight ${
-                          w.severity === 'error' ? 'text-red-400' : 
-                          w.severity === 'warning' ? 'text-orange-400' : 
-                          'text-blue-400'
-                        }`}>
-                          {w.message}
-                        </p>
-                        <div className="flex items-start gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                          <Wand2 className="w-3 h-3 text-neutral-600 mt-0.5" />
-                          <p className="text-[10px] text-neutral-400 leading-tight font-medium">
-                            <span className="text-neutral-500 font-black uppercase text-[8px] tracking-widest mr-1">Fix:</span> {w.action}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {/* VCC Tapping Order */}
+        <div className="space-y-3 pt-4 border-t border-white/10">
+          <h3 className="text-xs font-medium text-neutral-500 uppercase tracking-wider flex items-center justify-between">
+            VCC Tapping Order
+            <button
+              onClick={() => setVccDaisyChainOrder([])}
+              className="text-[10px] text-neutral-400 hover:text-white"
+            >
+              Reset
+            </button>
+          </h3>
+          <div className="p-3 bg-neutral-900 border border-white/5 rounded-xl text-xs text-neutral-400">
+            {vccDaisyChainOrder.length === 0 ? (
+              <p>Click components in routing mode to define custom VCC chain order.</p>
             ) : (
-              <div className="py-8 text-center space-y-3 bg-emerald-500/5 rounded-[2rem] border border-emerald-500/10 shadow-inner">
-                <div className="w-12 h-12 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto ring-1 ring-emerald-500/20">
-                  <Zap className="w-6 h-6 text-emerald-500" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.2em]">System Nominal</p>
-                  <p className="text-[9px] text-neutral-500 px-8 leading-relaxed font-medium">All design constraints satisfied. Your layout is ready for production.</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-blue-400 flex items-center gap-2">
-                <Settings2 className="w-3.5 h-3.5" />
-                Inspector
-              </h2>
-              {selectedIds.length > 0 && (
-                <button 
-                  onClick={() => setSelectedIds([])}
-                  className="text-[10px] font-black uppercase tracking-widest text-neutral-600 hover:text-white transition-colors flex items-center gap-1"
-                >
-                  <X className="w-3 h-3" />
-                  Clear
-                </button>
-              )}
-            </div>
-
-            {selectedIds.length > 0 ? (
-              <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="p-4 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
-                  <p className="text-[9px] text-neutral-500 uppercase font-black tracking-[0.2em] mb-2">
-                    {selectedIds.length} Object{selectedIds.length > 1 ? 's' : ''} Selected
-                  </p>
-                  {selectedIds.length === 1 ? (
-                    <div className="relative group">
-                      <input 
-                        type="text"
-                        value={components.find(c => c.id === selectedIds[0])?.label || ''}
-                        onChange={(e) => {
-                          const newLabel = e.target.value;
-                          setComponents(prev => prev.map(c => {
-                            if (c.id === selectedIds[0]) {
-                              return { ...c, label: newLabel };
-                            }
-                            return c;
-                          }));
-                        }}
-                        onBlur={() => saveHistory()}
-                        className="w-full bg-transparent border-none p-0 text-lg font-black text-white focus:ring-0 focus:outline-none placeholder:text-neutral-800"
-                        placeholder="Label..."
-                      />
-                      <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-500 transition-all group-focus-within:w-full" />
-                    </div>
-                  ) : (
-                    <p className="text-base font-black text-white flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-blue-500" />
-                      Batch Selection
-                    </p>
-                  )}
-                </div>
-
-                <button 
-                  onClick={smartRouteSelected}
-                  className="w-full py-4 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-2xl text-xs font-black text-blue-400 transition-all flex items-center justify-center gap-3 group shadow-lg shadow-blue-500/5"
-                >
-                  <Wand2 className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                  SMART ROUTE SELECTION
-                </button>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={() => {
-                      saveHistory();
-                      setComponents(prev => prev.map(c => {
-                        if (selectedIds.includes(c.id)) {
-                          return { ...c, rotation: ((c.rotation + 90) % 360) as 0 | 90 | 180 | 270 };
-                        }
-                        return c;
-                      }));
-                      setTimeout(() => rerouteTetheredWires(selectedIds), 0);
-                    }}
-                    className="py-4 bg-neutral-800/50 hover:bg-neutral-800 border border-white/5 rounded-2xl text-[10px] font-black transition-all flex flex-col items-center justify-center gap-2 text-neutral-400 hover:text-white"
-                    title="Rotate each component in place"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    INDIVIDUAL
-                  </button>
-
-                  <button 
-                    onClick={rotateSelected}
-                    className="py-4 bg-neutral-800/50 hover:bg-neutral-800 border border-white/5 rounded-2xl text-[10px] font-black transition-all flex flex-col items-center justify-center gap-2 text-neutral-400 hover:text-white"
-                    title="Rotate entire selection as a group"
-                  >
-                    <RotateCcw className="w-4 h-4 text-blue-400" />
-                    GROUP
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={reverseLabels}
-                    className="py-4 bg-neutral-800/50 hover:bg-neutral-800 border border-white/5 rounded-2xl text-[10px] font-black transition-all flex flex-col items-center justify-center gap-2 text-neutral-400 hover:text-white"
-                  >
-                    <ArrowLeftRight className="w-4 h-4 text-emerald-500" />
-                    REVERSE LABELS
-                  </button>
-                  <button 
-                    onClick={() => {
-                      saveHistory();
-                      setComponents(prev => prev.filter(c => !selectedIds.includes(c.id)));
-                      setWires(prev => prev.filter(w => !selectedIds.includes(w.id)));
-                      setSelectedIds([]);
-                    }}
-                    className="py-4 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 rounded-2xl text-[10px] font-black transition-all flex flex-col items-center justify-center gap-2 text-red-400"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    DELETE
-                  </button>
-                </div>
-
-                {selectedIds.length === 1 && (components.find(c => c.id === selectedIds[0])?.type === 'Potentiometer' || components.find(c => c.id === selectedIds[0])?.type === 'LDR') && (
-                  <div className="space-y-4 p-4 bg-black/40 rounded-2xl border border-white/5 shadow-inner">
-                    <p className="text-[9px] text-neutral-500 uppercase font-black tracking-[0.2em]">Analog Mapping</p>
-                    <div className="flex gap-2">
-                      {['A0', 'A1', 'None'].map((pin) => (
-                        <button
-                          key={pin}
-                          onClick={() => {
-                            saveHistory();
-                            setComponents(prev => prev.map(c => {
-                              if (c.id === selectedIds[0]) {
-                                return { ...c, analogPin: pin as any };
-                              }
-                              return c;
-                            }));
-                          }}
-                          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all border ${
-                            components.find(c => c.id === selectedIds[0])?.analogPin === pin
-                              ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                              : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10'
-                          }`}
-                        >
-                          {pin}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-neutral-500 italic">
-                      Assign this component to an MCU analog input.
-                    </p>
-                  </div>
-                )}
-
-                {(components.find(c => c.id === selectedIds[0])?.type === 'Resistor' || 
-                  components.find(c => c.id === selectedIds[0])?.type === 'LDR' || 
-                  components.find(c => c.id === selectedIds[0])?.type === 'Pushbutton' ||
-                  components.find(c => c.id === selectedIds[0])?.type === 'Potentiometer') && (
-                  <div className="space-y-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                    <p className="text-[10px] text-neutral-500 uppercase font-bold tracking-widest">Tapping</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      <button
-                        onClick={() => {
-                          const comp = components.find(c => c.id === selectedIds[0]);
-                          if (!comp) return;
-                          // For Resistor/LDR, tap the second pin. For Button, tap the second pin.
-                          // For Potentiometer, tap the third pin (GND).
-                          const holeIndex = comp.type === 'Potentiometer' ? 2 : 1;
-                          autoTapGround(selectedIds[0], holeIndex);
-                        }}
-                        className="w-full py-2 bg-neutral-900 hover:bg-black border border-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Zap className="w-3 h-3 text-orange-400" />
-                        Auto-tap to GND
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {selectedIds.length === 1 && components.find(c => c.id === selectedIds[0])?.type === 'Pushbutton' && (
-                  <div className="space-y-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                    <p className="text-[10px] text-neutral-500 uppercase font-bold tracking-widest">Button Configuration</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {[
-                        { label: 'Standard (2-pin, 3x1 holes)', width: 2, height: 0, holes: [{ x: 0, y: 0 }, { x: 2, y: 0 }] },
-                        { label: 'Large (4-pin, 5x3 holes)', width: 4, height: 2, holes: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 2 }, { x: 4, y: 2 }] },
-                        { label: 'Medium (4-pin, 4x3 holes)', width: 3, height: 2, holes: [{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 0, y: 2 }, { x: 3, y: 2 }] }
-                      ].map((preset, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            saveHistory();
-                            setComponents(prev => prev.map(c => {
-                              if (c.id === selectedIds[0]) {
-                                return { 
-                                  ...c, 
-                                  width: preset.width, 
-                                  height: preset.height, 
-                                  holes: preset.holes 
-                                };
-                              }
-                              return c;
-                            }));
-                            setTimeout(() => rerouteTetheredWires(selectedIds), 0);
-                          }}
-                          className={`py-2 px-3 rounded-lg text-xs font-medium transition-all border ${
-                            components.find(c => c.id === selectedIds[0])?.width === preset.width &&
-                            components.find(c => c.id === selectedIds[0])?.height === preset.height
-                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                              : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10'
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedIds.length === 1 && components.find(c => c.id === selectedIds[0])?.type === 'Potentiometer' && (
-                  <div className="space-y-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                    <p className="text-[10px] text-neutral-500 uppercase font-bold tracking-widest">Potentiometer Configuration</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {[
-                        { label: 'Standard (3x1 holes)', width: 2, holes: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }] },
-                        { label: 'Wide (5x1 holes)', width: 4, holes: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 4, y: 0 }] }
-                      ].map((preset, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            saveHistory();
-                            setComponents(prev => prev.map(c => {
-                              if (c.id === selectedIds[0]) {
-                                return { 
-                                  ...c, 
-                                  width: preset.width, 
-                                  holes: preset.holes 
-                                };
-                              }
-                              return c;
-                            }));
-                            setTimeout(() => rerouteTetheredWires(selectedIds), 0);
-                          }}
-                          className={`py-2 px-3 rounded-lg text-xs font-medium transition-all border ${
-                            components.find(c => c.id === selectedIds[0])?.width === preset.width
-                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                              : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10'
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedIds.length === 1 && components.find(c => c.id === selectedIds[0])?.type === 'Resistor' && (
-                  <div className="space-y-3 p-3 bg-white/5 rounded-xl border border-white/5">
-                    <p className="text-[10px] text-neutral-500 uppercase font-bold tracking-widest">Resistor Configuration</p>
-                    <div className="grid grid-cols-1 gap-2">
-                      {[
-                        { label: 'Standard (3x1 holes)', width: 2, holes: [{ x: 0, y: 0 }, { x: 2, y: 0 }] },
-                        { label: 'Wide (5x1 holes)', width: 4, holes: [{ x: 0, y: 0 }, { x: 4, y: 0 }] }
-                      ].map((preset, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            saveHistory();
-                            setComponents(prev => prev.map(c => {
-                              if (c.id === selectedIds[0]) {
-                                return { 
-                                  ...c, 
-                                  width: preset.width, 
-                                  holes: preset.holes 
-                                };
-                              }
-                              return c;
-                            }));
-                            setTimeout(() => rerouteTetheredWires(selectedIds), 0);
-                          }}
-                          className={`py-2 px-3 rounded-lg text-xs font-medium transition-all border ${
-                            components.find(c => c.id === selectedIds[0])?.width === preset.width
-                              ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                              : 'bg-white/5 border-white/10 text-neutral-400 hover:bg-white/10'
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <button 
-                  onClick={() => {
-                    saveHistory();
-                    setComponents(prev => prev.filter(c => !selectedIds.includes(c.id)));
-                    setSelectedIds([]);
-                  }}
-                  className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-sm font-medium text-red-400 transition-all"
-                >
-                  Delete Selected
-                </button>
-                
-                <p className="text-[10px] text-neutral-500 italic text-center">
-                  Tip: Hold Shift to select multiple components.
-                </p>
-              </div>
-            ) : selectedWireId ? (
-              <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-                  <p className="text-xs text-neutral-500 uppercase font-bold tracking-widest mb-1">
-                    Wire Selected
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-3 h-3 rounded-full" 
-                      style={{ backgroundColor: wires.find(w => w.id === selectedWireId)?.color }} 
-                    />
-                    <p className="text-sm font-bold text-emerald-400">
-                      #{wires.findIndex(w => w.id === selectedWireId) + 1}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
-                  <p className="text-[10px] text-blue-400 uppercase font-bold mb-2">Manipulation</p>
-                  <p className="text-xs text-neutral-400 leading-relaxed">
-                    • Drag white circles to move points<br/>
-                    • Click on wire to add new point<br/>
-                    • Press <kbd className="px-1 bg-white/10 rounded">Esc</kbd> to deselect
-                  </p>
-                </div>
-
-                <button 
-                  onClick={() => {
-                    saveHistory();
-                    setWires(prev => prev.filter(w => w.id !== selectedWireId));
-                    setSelectedWireId(null);
-                  }}
-                  className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-sm font-medium text-red-400 transition-all flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Wire
-                </button>
-              </div>
-            ) : (
-              <div className="py-12 text-center space-y-3">
-                <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto">
-                  <MousePointer2 className="w-6 h-6 text-neutral-600" />
-                </div>
-                <p className="text-sm text-neutral-500">Select components or wires to edit.</p>
-              </div>
-            )}
-          </div>
-                <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500 flex items-center gap-2">
-                <Settings2 className="w-3.5 h-3.5" />
-                Tapping Order
-              </h2>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] text-neutral-500 uppercase font-black tracking-widest">VCC Daisy Chain</p>
-                <div className="px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 text-[8px] font-black uppercase tracking-widest">Auto-Routing</div>
-              </div>
-              <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
                 {vccDaisyChainOrder.map((id, idx) => {
                   const comp = components.find(c => c.id === id);
-                  return (
-                    <div key={id} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5 group hover:border-white/10 transition-all">
-                      <div className="flex items-center gap-4">
-                        <span className="text-[10px] font-black text-neutral-700 w-4 tracking-tighter">{String(idx + 1).padStart(2, '0')}</span>
-                        <div className="flex flex-col">
-                          <span className="text-[11px] font-black text-white leading-none">{comp?.label || id}</span>
-                          <span className="text-[9px] text-neutral-600 font-mono mt-1 uppercase tracking-tighter">{comp?.type || 'Component'}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
-                        <button 
-                          onClick={() => moveVccItem(idx, 'up')}
-                          disabled={idx === 0}
-                          className="p-1.5 hover:bg-white/10 rounded-lg disabled:opacity-20 text-neutral-400 hover:text-white transition-all"
-                          aria-label="Move item up"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button 
-                          onClick={() => moveVccItem(idx, 'down')}
-                          disabled={idx === vccDaisyChainOrder.length - 1}
-                          className="p-1.5 hover:bg-white/10 rounded-lg disabled:opacity-20 text-neutral-400 hover:text-white transition-all"
-                          aria-label="Move item down"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                  return comp ? (
+                    <div key={id} className="flex items-center gap-1.5">
+                      {idx > 0 && <span className="text-neutral-600">→</span>}
+                      <span className="bg-white/10 px-1.5 py-0.5 rounded font-mono text-white">{comp.label}</span>
                     </div>
-                  );
+                  ) : null;
                 })}
               </div>
-              <div className="flex items-center gap-2 p-3 bg-orange-500/5 rounded-xl border border-orange-500/10">
-                <Info className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                <p className="text-[10px] text-orange-400/80 leading-tight font-medium italic">This order defines the power sequence for "Smart Route All".</p>
-              </div>
-            </div>
+            )}
           </div>
+        </div>
+      </motion.aside>
 
-          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-blue-500 flex items-center gap-2">
-                <Layers className="w-3.5 h-3.5" />
-                Trace Manager
-              </h2>
-              <div className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[8px] font-black uppercase tracking-widest">{wires.length} Active</div>
-            </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-2">
-              {wires.length > 0 ? (
-                wires.map((w, idx) => (
-                  <div 
-                    key={w.id} 
-                    onClick={() => {
-                      setSelectedWireId(w.id);
-                      setSelectedIds([]);
-                    }}
-                    className={`flex items-center justify-between p-3 rounded-xl border transition-all group cursor-pointer ${
-                      selectedWireId === w.id ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-black/40 border-white/5 hover:border-white/10'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-3 h-3 rounded-full shadow-lg" style={{ backgroundColor: w.color, boxShadow: `0 0 10px ${w.color}40` }} />
-                      <div className="flex flex-col">
-                        <span className={`text-[11px] font-black ${selectedWireId === w.id ? 'text-emerald-400' : 'text-neutral-300'}`}>
-                          Trace #{String(idx + 1).padStart(2, '0')}
-                        </span>
-                        <span className="text-[9px] text-neutral-600 font-mono uppercase tracking-widest mt-0.5">{w.path.length} nodes</span>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        saveHistory();
-                        setWires(prev => prev.filter(wire => wire.id !== w.id));
-                        if (selectedWireId === w.id) setSelectedWireId(null);
-                      }}
-                      className="p-2 hover:bg-red-500/10 rounded-lg text-neutral-600 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
-                      aria-label="Delete Trace"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="py-8 text-center space-y-2 bg-black/20 rounded-2xl border border-dashed border-white/5">
-                  <Layers className="w-6 h-6 text-neutral-800 mx-auto" />
-                  <p className="text-[10px] text-neutral-600 font-black uppercase tracking-widest">No traces detected</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-black/60 backdrop-blur-3xl rounded-[2rem] border border-white/10 shadow-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white flex items-center gap-2">
-                <Zap className="w-3.5 h-3.5 text-emerald-500" />
-                Quick Actions
-              </h2>
-            </div>
-            <div className="grid grid-cols-1 gap-3">
-              <button 
-                onClick={smartRouteAll}
-                className="group relative w-full py-4 bg-emerald-500 text-black rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                <Zap className="w-4 h-4" />
-                SMART ROUTE ALL
-              </button>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={() => {
-                    saveHistory();
-                    setWires([]);
-                    setSelectedWireId(null);
-                  }}
-                  className="py-3 bg-neutral-800/50 hover:bg-neutral-800 border border-white/5 rounded-2xl text-[10px] font-black transition-all flex flex-col items-center justify-center gap-2 text-neutral-400 hover:text-white"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  CLEAR TRACES
-                </button>
-                <button 
-                  onClick={() => {
-                    saveHistory();
-                    const initial = createInitialComponents();
-                    setComponents(prev => initial.map(comp => {
-                      const existing = prev.find(p => p.id === comp.id);
-                      if (existing) {
-                        return { ...comp, position: existing.position, rotation: existing.rotation };
-                      }
-                      return comp;
-                    }));
-                    setWires([]);
-                    setSelectedIds([]);
-                    setSelectedWireId(null);
-                    setRoutingMode(false);
-                    setActiveWirePath([]);
-                  }}
-                  className="py-3 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 rounded-2xl text-[10px] font-black transition-all flex flex-col items-center justify-center gap-2 text-red-400"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  RESET BOARD
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 bg-emerald-500/5 rounded-[2rem] border border-emerald-500/10 space-y-4">
-            <p className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.2em] flex items-center gap-2">
-              <Info className="w-3.5 h-3.5" />
-              Wiring Standards
-            </p>
-            <div className="grid grid-cols-1 gap-3">
-              <div className="flex items-center justify-between p-2 bg-black/20 rounded-xl border border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />
-                  <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">VCC</span>
-                </div>
-                <span className="text-[9px] text-neutral-600 font-mono">POWER</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-black/20 rounded-xl border border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-black border border-white/20 shadow-[0_0_8px_rgba(0,0,0,0.5)]" />
-                  <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">GND</span>
-                </div>
-                <span className="text-[9px] text-neutral-600 font-mono">GROUND</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-black/20 rounded-xl border border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                  <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">SIG</span>
-                </div>
-                <span className="text-[9px] text-neutral-600 font-mono">SIGNAL</span>
-              </div>
-            </div>
-          </div>
-        </aside>
-      </main>
+</main>
 
       {/* Footer Status Bar */}
       <footer className="h-8 shrink-0 bg-neutral-900 border-t border-white/5 px-6 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-neutral-600">
